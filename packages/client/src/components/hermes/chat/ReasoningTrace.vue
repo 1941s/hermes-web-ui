@@ -141,7 +141,7 @@ const dedupedDisplayFrames = computed(() => {
 
 const groupedFrames = computed(() => groupDisplayFramesByTraceId(dedupedDisplayFrames.value))
 const shouldVirtualize = computed(() => dedupedDisplayFrames.value.length >= VIRTUALIZE_THRESHOLD_FRAMES)
-const toolLogs = computed(() => [...props.toolMessages].reverse())
+const toolLogs = computed(() => props.toolMessages)
 
 const estimatedHeights = computed(() => dedupedDisplayFrames.value.map(frame => estimateCardHeight(frame)))
 const offsets = computed(() => {
