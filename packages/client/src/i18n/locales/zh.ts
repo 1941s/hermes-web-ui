@@ -152,6 +152,12 @@ export default {
     arguments: '参数',
     result: '结果',
     truncated: '... (已截断)',
+    reasoningTitle: '推理轨迹',
+    reasoningTraceRound: '第 {n} 轮',
+    reasoningTraceLatest: '当前',
+    reasoningTraceTriggeredBy: '由此用户消息触发的推理',
+    reasoningTraceNoUserMatch: '（未匹配到会话中的用户原文）',
+    reasoningTraceEmpty: '暂无推理帧（思考、工具调用等会显示在这里）',
   },
 
   // 定时任务
@@ -382,6 +388,8 @@ export default {
       compactHint: '减少消息间距',
       showReasoning: '显示推理过程',
       showReasoningHint: '展示模型思考过程',
+      showReasoningPanel: '显示推理轨迹侧栏',
+      showReasoningPanelHint: '控制是否展示推理轨迹和工具调用日志',
       showCost: '显示费用',
       showCostHint: '在回复中显示 token 使用量',
       inlineDiffs: '内联差异',

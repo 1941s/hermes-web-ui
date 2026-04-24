@@ -152,6 +152,12 @@ export default {
     arguments: 'Arguments',
     result: 'Result',
     truncated: '... (truncated)',
+    reasoningTitle: 'Reasoning Trace',
+    reasoningTraceRound: 'Turn {n}',
+    reasoningTraceLatest: 'Latest',
+    reasoningTraceTriggeredBy: 'Reasoning triggered by this message',
+    reasoningTraceNoUserMatch: '(No user message matched for this trace)',
+    reasoningTraceEmpty: 'No reasoning frames yet (thoughts, tools, etc. appear here)',
   },
 
   // Jobs
@@ -390,6 +396,8 @@ export default {
       compactHint: 'Reduce message spacing',
       showReasoning: 'Show Reasoning',
       showReasoningHint: 'Show model thinking process',
+      showReasoningPanel: 'Show Reasoning Sidebar',
+      showReasoningPanelHint: 'Toggle reasoning trace and tool call log sidebar',
       showCost: 'Show Cost',
       showCostHint: 'Show token usage in replies',
       inlineDiffs: 'Inline Diffs',

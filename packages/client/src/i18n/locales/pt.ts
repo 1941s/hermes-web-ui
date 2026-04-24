@@ -128,6 +128,12 @@ export default {
     arguments: 'Argumentos',
     result: 'Resultado',
     truncated: '... (truncado)',
+    reasoningTitle: 'Rastro de raciocinio',
+    reasoningTraceRound: 'Turno {n}',
+    reasoningTraceLatest: 'Mais recente',
+    reasoningTraceTriggeredBy: 'Raciocinio acionado por esta mensagem',
+    reasoningTraceNoUserMatch: '(Nenhuma mensagem de usuario corresponde a este rastro)',
+    reasoningTraceEmpty: 'Ainda nao ha quadros de raciocinio (pensamentos, ferramentas etc. aparecem aqui)',
   },
 
   // Jobs
@@ -348,6 +354,8 @@ export default {
       compactHint: 'Reduzir espacamento entre mensagens',
       showReasoning: 'Mostrar raciocinio',
       showReasoningHint: 'Mostrar processo de pensamento do modelo',
+      showReasoningPanel: 'Mostrar barra lateral de raciocinio',
+      showReasoningPanelHint: 'Alternar barra de rastreio de raciocinio e log de ferramentas',
       showCost: 'Mostrar custo',
       showCostHint: 'Mostrar uso de tokens nas respostas',
       inlineDiffs: 'Diffs em linha',

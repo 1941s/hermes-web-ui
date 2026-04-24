@@ -128,6 +128,12 @@ export default {
     arguments: 'Argumentos',
     result: 'Resultado',
     truncated: '... (truncado)',
+    reasoningTitle: 'Traza de razonamiento',
+    reasoningTraceRound: 'Turno {n}',
+    reasoningTraceLatest: 'Mas reciente',
+    reasoningTraceTriggeredBy: 'Razonamiento activado por este mensaje',
+    reasoningTraceNoUserMatch: '(No se encontro ningun mensaje de usuario para esta traza)',
+    reasoningTraceEmpty: 'Aun no hay marcos de razonamiento (pensamientos, herramientas, etc. aparecen aqui)',
   },
 
   // Jobs
@@ -348,6 +354,8 @@ export default {
       compactHint: 'Reducir el espaciado entre mensajes',
       showReasoning: 'Mostrar razonamiento',
       showReasoningHint: 'Mostrar el proceso de pensamiento del modelo',
+      showReasoningPanel: 'Mostrar barra lateral de razonamiento',
+      showReasoningPanelHint: 'Alternar barra de traza de razonamiento y registro de herramientas',
       showCost: 'Mostrar costo',
       showCostHint: 'Mostrar uso de tokens en las respuestas',
       inlineDiffs: 'Diffs en linea',

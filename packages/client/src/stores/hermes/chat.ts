@@ -1,7 +1,8 @@
-import { startRun, streamRunEvents, type ChatMessage, type RunEvent } from '@/api/hermes/chat'
+import { startRun, streamRunEvents, type AgentFrame, type ChatMessage, type RunEvent } from '@/api/hermes/chat'
 import { deleteSession as deleteSessionApi, fetchSession, fetchSessions, fetchSessionUsageSingle, type HermesMessage, type SessionSummary } from '@/api/hermes/sessions'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { appendReasoningFrame, deriveTraceState, nextReasoningSeq, normalizeFramesFromEvent, type TraceState } from './frame-normalizer'
 import { useAppStore } from './app'
 import { useProfilesStore } from './profiles'
 
@@ -42,6 +43,8 @@ export interface Session {
   outputTokens?: number
   endedAt?: number | null
   lastActiveAt?: number
+  reasoningFrames: AgentFrame[]
+  traceUserInputs: Record<string, string>
 }
 
 function uid(): string {
@@ -159,7 +162,19 @@ function mapHermesSession(s: SessionSummary): Session {
     messageCount: s.message_count,
     endedAt: s.ended_at != null ? Math.round(s.ended_at * 1000) : null,
     lastActiveAt: s.last_active != null ? Math.round(s.last_active * 1000) : undefined,
+    reasoningFrames: [],
+    traceUserInputs: {},
   }
+}
+
+function applyServerSessionSnapshot(target: Session, detail: Awaited<ReturnType<typeof fetchSession>>) {
+  if (!detail) return
+  const mapped = mapHermesMessages(detail.messages || [])
+  const traceState = deriveTraceState(detail.messages || [])
+  target.messages = mapped
+  target.reasoningFrames = traceState.frames
+  target.traceUserInputs = traceState.traceUserInputs
+  if (detail.title) target.title = detail.title
 }
 
 // Cache keys for stale-while-revalidate loading of sessions / messages.
@@ -174,6 +189,7 @@ const IN_FLIGHT_TTL_MS = 15 * 60 * 1000 // Give up after 15 minutes
 const POLL_INTERVAL_MS = 2000
 const POLL_STABLE_EXITS = 3 // 3 × 2s = 6s of no change → assume run finished
 const LIVE_BADGE_WINDOW_MS = 5 * 60 * 1000
+const REASONING_SYNC_INTERVAL_MS = 1200
 
 // 获取当前 profile 名称，用于隔离缓存。
 // 从 profiles store 的 activeProfileName（同步 localStorage）读取，
@@ -305,6 +321,18 @@ function sanitizeForCache(msgs: Message[]): Message[] {
   })
 }
 
+function sanitizeTraceStateForCache(state: TraceState): TraceState {
+  return {
+    frames: state.frames.map(frame => ({
+      type: frame.type,
+      seq: frame.seq,
+      trace_id: frame.trace_id,
+      payload: frame.payload && typeof frame.payload === 'object' ? frame.payload : {},
+    })),
+    traceUserInputs: { ...state.traceUserInputs },
+  }
+}
+
 export const useChatStore = defineStore('chat', () => {
   const sessions = ref<Session[]>([])
   const activeSessionId = ref<string | null>(null)
@@ -324,9 +352,12 @@ export const useChatStore = defineStore('chat', () => {
   )
   const pollTimers = new Map<string, ReturnType<typeof setInterval>>()
   const pollSignatures = new Map<string, { sig: string, stableTicks: number }>()
+  const reasoningSyncTimers = new Map<string, ReturnType<typeof setInterval>>()
 
   const activeSession = ref<Session | null>(null)
   const messages = computed<Message[]>(() => activeSession.value?.messages || [])
+  const reasoningFrames = computed<AgentFrame[]>(() => activeSession.value?.reasoningFrames || [])
+  const traceUserInputs = computed<Record<string, string>>(() => activeSession.value?.traceUserInputs || {})
 
   function isSessionLive(sessionId: string): boolean {
     if (streamStates.value.has(sessionId) || resumingRuns.value.has(sessionId)) return true
@@ -349,7 +380,18 @@ export const useChatStore = defineStore('chat', () => {
     const sid = activeSessionId.value
     if (!sid) return
     const s = sessions.value.find(sess => sess.id === sid)
-    if (s) saveJsonWithLegacy(msgsCacheKey(sid), sanitizeForCache(s.messages), legacyMsgsCacheKey(sid))
+  if (!s) return
+  saveJsonWithLegacy(
+    msgsCacheKey(sid),
+    {
+      messages: sanitizeForCache(s.messages),
+      traceState: sanitizeTraceStateForCache({
+        frames: s.reasoningFrames,
+        traceUserInputs: s.traceUserInputs,
+      }),
+    },
+    legacyMsgsCacheKey(sid),
+  )
   }
 
   function markInFlight(sid: string, runId: string) {
@@ -380,6 +422,37 @@ export const useChatStore = defineStore('chat', () => {
     resumingRuns.value = new Set([...resumingRuns.value].filter(x => x !== sid))
   }
 
+  function stopReasoningSync(sid: string) {
+    const timer = reasoningSyncTimers.get(sid)
+    if (!timer) return
+    clearInterval(timer)
+    reasoningSyncTimers.delete(sid)
+  }
+
+  function startReasoningSync(sid: string) {
+    if (reasoningSyncTimers.has(sid)) return
+    const timer = setInterval(async () => {
+      if (!streamStates.value.has(sid)) {
+        stopReasoningSync(sid)
+        return
+      }
+      try {
+        const detail = await fetchSession(sid)
+        if (!detail) return
+        const target = sessions.value.find(s => s.id === sid)
+        if (!target) return
+        const traceState = deriveTraceState(detail.messages || [])
+        target.reasoningFrames = traceState.frames
+        target.traceUserInputs = traceState.traceUserInputs
+        if (detail.title && !target.title) target.title = detail.title
+        if (sid === activeSessionId.value) persistActiveMessages()
+      } catch {
+        // transient errors are expected during streaming
+      }
+    }, REASONING_SYNC_INTERVAL_MS)
+    reasoningSyncTimers.set(sid, timer)
+  }
+
   // Poll fetchSession while an in-flight run is recovering. Exits when the
   // server's message signature is stable for POLL_STABLE_EXITS ticks (run
   // presumed done), TTL elapses, or the user explicitly starts streaming.
@@ -401,6 +474,7 @@ export const useChatStore = defineStore('chat', () => {
         const detail = await fetchSession(sid)
         if (!detail) return
         const mapped = mapHermesMessages(detail.messages || [])
+        const traceState = deriveTraceState(detail.messages || [])
         const target = sessions.value.find(s => s.id === sid)
         if (!target) return
         // Use the same "content-aware" comparison as switchSession: server
@@ -422,6 +496,8 @@ export const useChatStore = defineStore('chat', () => {
           || (serverUsers === localUsers && serverAssistantLen >= localAssistantLen)
         if (serverIsAhead) {
           target.messages = mapped
+          target.reasoningFrames = traceState.frames
+          target.traceUserInputs = traceState.traceUserInputs
           if (detail.title && !target.title) target.title = detail.title
           if (sid === activeSessionId.value) persistActiveMessages()
         }
@@ -465,13 +541,26 @@ export const useChatStore = defineStore('chat', () => {
       // 从 profile 对应的缓存中恢复，实现 instant render
       const cachedSessions = loadJsonWithFallback<Session[]>(sessionsCacheKey(), legacySessionsCacheKey())
       if (cachedSessions?.length) {
-        sessions.value = cachedSessions
+        sessions.value = cachedSessions.map(s => ({
+          ...s,
+          reasoningFrames: s.reasoningFrames || [],
+          traceUserInputs: s.traceUserInputs || {},
+        }))
         const savedId = localStorage.getItem(storageKey()) || (legacyStorageKey() ? localStorage.getItem(legacyStorageKey()!) : null)
         if (savedId) {
           const cachedActive = cachedSessions.find(s => s.id === savedId) || null
           if (cachedActive) {
-            const cachedMsgs = loadJsonWithFallback<Message[]>(msgsCacheKey(savedId), legacyMsgsCacheKey(savedId))
-            if (cachedMsgs) cachedActive.messages = cachedMsgs
+            const cachedPayload = loadJsonWithFallback<{ messages?: Message[], traceState?: TraceState } | Message[]>(
+              msgsCacheKey(savedId),
+              legacyMsgsCacheKey(savedId),
+            )
+            if (Array.isArray(cachedPayload)) {
+              cachedActive.messages = cachedPayload
+            } else if (cachedPayload?.messages) {
+              cachedActive.messages = cachedPayload.messages
+              cachedActive.reasoningFrames = cachedPayload.traceState?.frames || []
+              cachedActive.traceUserInputs = cachedPayload.traceState?.traceUserInputs || {}
+            }
             activeSession.value = cachedActive
             activeSessionId.value = savedId
           }
@@ -493,7 +582,11 @@ export const useChatStore = defineStore('chat', () => {
       // this, refreshing mid-run would wipe the session and fall back to
       // sessions[0], which is exactly what the user reported.
       const localOnly = sessions.value.filter(s => !freshIds.has(s.id))
-      sessions.value = [...localOnly, ...fresh]
+      sessions.value = [...localOnly, ...fresh].map(s => ({
+        ...s,
+        reasoningFrames: s.reasoningFrames || [],
+        traceUserInputs: s.traceUserInputs || {},
+      }))
       persistSessionsList()
 
       // Restore last active session, fallback to most recent
@@ -523,9 +616,7 @@ export const useChatStore = defineStore('chat', () => {
       if (!detail) return false
       const target = sessions.value.find(s => s.id === sid)
       if (!target) return false
-      const mapped = mapHermesMessages(detail.messages || [])
-      target.messages = mapped
-      if (detail.title) target.title = detail.title
+      applyServerSessionSnapshot(target, detail)
       persistActiveMessages()
       return true
     } catch (err) {
@@ -543,6 +634,8 @@ export const useChatStore = defineStore('chat', () => {
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      reasoningFrames: [],
+      traceUserInputs: {},
     }
     sessions.value.unshift(session)
     // Persist immediately so a refresh before run.completed can still find
@@ -566,9 +659,16 @@ export const useChatStore = defineStore('chat', () => {
     // loading state while we fetch.
     const hasLocalMessages = activeSession.value.messages.length > 0
     if (!hasLocalMessages) {
-      const cachedMsgs = loadJsonWithFallback<Message[]>(msgsCacheKey(sessionId), legacyMsgsCacheKey(sessionId))
-      if (cachedMsgs?.length) {
-        activeSession.value.messages = cachedMsgs
+      const cachedPayload = loadJsonWithFallback<{ messages?: Message[], traceState?: TraceState } | Message[]>(
+        msgsCacheKey(sessionId),
+        legacyMsgsCacheKey(sessionId),
+      )
+      if (Array.isArray(cachedPayload) && cachedPayload.length) {
+        activeSession.value.messages = cachedPayload
+      } else if (!Array.isArray(cachedPayload) && cachedPayload?.messages?.length) {
+        activeSession.value.messages = cachedPayload.messages
+        activeSession.value.reasoningFrames = cachedPayload.traceState?.frames || []
+        activeSession.value.traceUserInputs = cachedPayload.traceState?.traceUserInputs || {}
       }
     }
 
@@ -579,6 +679,7 @@ export const useChatStore = defineStore('chat', () => {
       const detail = await fetchSession(sessionId)
       if (detail && detail.messages) {
         const mapped = mapHermesMessages(detail.messages)
+        const traceState = deriveTraceState(detail.messages)
         // Pick whichever view has more information. Simple length comparison
         // is wrong because mapHermesMessages folds tool_call-only assistant
         // msgs and matches them with tool-result msgs — so post-fold `mapped`
@@ -608,6 +709,8 @@ export const useChatStore = defineStore('chat', () => {
           || (serverUsers === localUsers && serverAssistantLen >= localAssistantLen)
         if (serverIsAhead) {
           activeSession.value.messages = mapped
+          activeSession.value.reasoningFrames = traceState.frames
+          activeSession.value.traceUserInputs = traceState.traceUserInputs
         }
         // Update title: use Hermes title, or fallback to first user message
         if (detail.title) {
@@ -783,10 +886,13 @@ export const useChatStore = defineStore('chat', () => {
       // polling an earlier run), cancel that polling — the new SSE stream is
       // the authoritative live source.
       stopPolling(sid)
+      stopReasoningSync(sid)
+      startReasoningSync(sid)
 
       // Helper to clean up this session's stream state
       const cleanup = () => {
         streamStates.value.delete(sid)
+        stopReasoningSync(sid)
         if (persistTimer) {
           clearTimeout(persistTimer)
           persistTimer = null
@@ -810,6 +916,16 @@ export const useChatStore = defineStore('chat', () => {
         runId,
         // onEvent
         (evt: RunEvent) => {
+          const targetSession = sessions.value.find(s => s.id === sid)
+          const latestUserText = userMsg.content
+          const fallbackTraceId = `turn:${userMsg.id}`
+          const eventFrames = targetSession
+            ? normalizeFramesFromEvent(evt, fallbackTraceId, nextReasoningSeq(targetSession))
+            : []
+          if (targetSession && eventFrames.length) {
+            eventFrames.forEach(frame => appendReasoningFrame(targetSession, frame, latestUserText))
+            schedulePersist()
+          }
           switch (evt.event) {
             case 'run.started':
               break
@@ -877,6 +993,19 @@ export const useChatStore = defineStore('chat', () => {
                   target.outputTokens = evt.usage.output_tokens
                 }
               }
+              // 对齐 hermes-agent-ui：run 结束后用服务端消息快照回填
+              // reasoning/tool_call，确保轨迹里稳定可见“思考过程 + 工具调用”。
+              void (async () => {
+                try {
+                  const detail = await fetchSession(sid)
+                  const target = sessions.value.find(s => s.id === sid)
+                  if (target && detail) {
+                    applyServerSessionSnapshot(target, detail)
+                  }
+                } finally {
+                  if (sid === activeSessionId.value) persistActiveMessages()
+                }
+              })()
               cleanup()
               updateSessionTitle(sid)
               // the in-flight marker. If the browser is reloading right now
@@ -887,6 +1016,7 @@ export const useChatStore = defineStore('chat', () => {
               if (sid === activeSessionId.value) persistActiveMessages()
               clearInFlight(sid)
               stopPolling(sid)
+              stopReasoningSync(sid)
               break
             }
 
@@ -916,6 +1046,7 @@ export const useChatStore = defineStore('chat', () => {
               if (sid === activeSessionId.value) persistActiveMessages()
               clearInFlight(sid)
               stopPolling(sid)
+              stopReasoningSync(sid)
               break
             }
           }
@@ -989,6 +1120,7 @@ export const useChatStore = defineStore('chat', () => {
       streamStates.value.delete(sid)
       clearInFlight(sid)
       stopPolling(sid)
+      stopReasoningSync(sid)
     }
   }
 
@@ -1010,6 +1142,8 @@ export const useChatStore = defineStore('chat', () => {
     activeSession,
     focusMessageId,
     messages,
+    reasoningFrames,
+    traceUserInputs,
     isStreaming,
     isRunActive,
     isSessionLive,

@@ -7,6 +7,7 @@ export interface DisplayConfig {
   busy_input_mode?: string
   bell_on_complete?: boolean
   show_reasoning?: boolean
+  show_reasoning_panel?: boolean
   streaming?: boolean
   inline_diffs?: boolean
   show_cost?: boolean

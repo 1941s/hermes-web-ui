@@ -128,6 +128,12 @@ export default {
     arguments: '引数',
     result: '結果',
     truncated: '... (省略)',
+    reasoningTitle: '推論トレース',
+    reasoningTraceRound: 'ターン {n}',
+    reasoningTraceLatest: '最新',
+    reasoningTraceTriggeredBy: 'このメッセージで推論がトリガーされました',
+    reasoningTraceNoUserMatch: '（このトレースに対応するユーザーメッセージが見つかりません）',
+    reasoningTraceEmpty: '推論フレームはまだありません（思考、ツールなどがここに表示されます）',
   },
 
   // スケジュールジョブ
@@ -348,6 +354,8 @@ export default {
       compactHint: 'メッセージの間隔を狭める',
       showReasoning: '推論過程を表示',
       showReasoningHint: 'モデルの思考プロセスを表示',
+      showReasoningPanel: '推理サイドバーを表示',
+      showReasoningPanelHint: '推理トレースとツールログのサイドバー表示を切り替え',
       showCost: 'コストを表示',
       showCostHint: '返信にトークン使用量を表示',
       inlineDiffs: 'インライン差分',

@@ -128,6 +128,12 @@ export default {
     arguments: 'Argumente',
     result: 'Ergebnis',
     truncated: '... (abgeschnitten)',
+    reasoningTitle: 'Denkspur',
+    reasoningTraceRound: 'Runde {n}',
+    reasoningTraceLatest: 'Neueste',
+    reasoningTraceTriggeredBy: 'Denkprozess durch diese Nachricht ausgelöst',
+    reasoningTraceNoUserMatch: '(Keine passende Benutzernachricht für diese Spur gefunden)',
+    reasoningTraceEmpty: 'Noch keine Denk-Frames (Gedanken, Werkzeuge usw. erscheinen hier)',
   },
 
   // Jobs
@@ -348,6 +354,8 @@ export default {
       compactHint: 'Nachrichtenabstand reduzieren',
       showReasoning: 'Schlussfolgerung anzeigen',
       showReasoningHint: 'Denkprozess des Modells anzeigen',
+      showReasoningPanel: 'Reasoning-Seitenleiste anzeigen',
+      showReasoningPanelHint: 'Ein- oder ausblenden von Reasoning-Trace und Tool-Log',
       showCost: 'Kosten anzeigen',
       showCostHint: 'Token-Nutzung in Antworten anzeigen',
       inlineDiffs: 'Inline-Diffs',

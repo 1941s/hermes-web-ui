@@ -128,6 +128,12 @@ export default {
     arguments: 'Arguments',
     result: 'Resultat',
     truncated: '... (tronque)',
+    reasoningTitle: 'Trace de raisonnement',
+    reasoningTraceRound: 'Tour {n}',
+    reasoningTraceLatest: 'Le plus recent',
+    reasoningTraceTriggeredBy: 'Raisonnement declenche par ce message',
+    reasoningTraceNoUserMatch: '(Aucun message utilisateur correspondant pour cette trace)',
+    reasoningTraceEmpty: 'Aucun cadre de raisonnement pour le moment (pensees, outils, etc. apparaissent ici)',
   },
 
   // Jobs
@@ -348,6 +354,8 @@ export default {
       compactHint: 'Reduire l\'espacement des messages',
       showReasoning: 'Afficher le raisonnement',
       showReasoningHint: 'Afficher le processus de reflexion du modele',
+      showReasoningPanel: 'Afficher le panneau de raisonnement',
+      showReasoningPanelHint: 'Afficher/masquer la trace de raisonnement et le journal des outils',
       showCost: 'Afficher le cout',
       showCostHint: 'Afficher l\'utilisation des jetons dans les reponses',
       inlineDiffs: 'Diffs en ligne',

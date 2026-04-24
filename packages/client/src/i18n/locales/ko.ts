@@ -128,6 +128,12 @@ export default {
     arguments: '인수',
     result: '결과',
     truncated: '... (잘림)',
+    reasoningTitle: '추론 트레이스',
+    reasoningTraceRound: '턴 {n}',
+    reasoningTraceLatest: '최신',
+    reasoningTraceTriggeredBy: '이 메시지로 인해 추론이 시작되었습니다',
+    reasoningTraceNoUserMatch: '(이 트레이스와 일치하는 사용자 메시지가 없습니다)',
+    reasoningTraceEmpty: '아직 추론 프레임이 없습니다 (생각, 도구 등은 여기에 표시됩니다)',
   },
 
   // 예약 작업
@@ -348,6 +354,8 @@ export default {
       compactHint: '메시지 간격 줄이기',
       showReasoning: '추론 과정 표시',
       showReasoningHint: '모델의 생각 과정 표시',
+      showReasoningPanel: '추론 사이드바 표시',
+      showReasoningPanelHint: '추론 추적 및 도구 로그 사이드바 표시 전환',
       showCost: '비용 표시',
       showCostHint: '응답에 토큰 사용량 표시',
       inlineDiffs: '인라인 변경사항',

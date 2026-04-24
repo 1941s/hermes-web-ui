@@ -33,6 +33,34 @@ export interface RunEvent {
     output_tokens: number
     total_tokens: number
   }
+  frame?: AgentFrame
+  trace_id?: string
+  seq?: number
+  payload?: Record<string, any>
+  data?: Record<string, any>
+  type?: string
+  tool_call_id?: string
+  args?: unknown
+  result?: unknown
+  artifact?: Record<string, any>
+}
+
+export type AgentFrameType =
+  | 'THOUGHT'
+  | 'TOOL_CALL'
+  | 'ARTIFACT'
+  | 'RESPONSE'
+  | 'STATUS'
+  | 'ERROR'
+  | 'SUBAGENT'
+  | 'HEARTBEAT'
+  | string
+
+export interface AgentFrame {
+  type: AgentFrameType
+  seq: number
+  trace_id: string
+  payload: Record<string, any>
 }
 
 export async function startRun(body: StartRunRequest): Promise<StartRunResponse> {
